@@ -1,10 +1,13 @@
 import Search from './models/Search';
 import Recipe from './models/Recipe';
 import List from './models/List';
+import Likes from './models/Likes';
 import * as searchView from './views/searchView';
 import * as recipeView from './views/recipeView';
 import * as listView from './views/listView';
+import * as likeView from './views/likeView';
 import { elements, renderLoader, clearLoader } from './views/base';
+
 
 
 /* Global state of the app
@@ -99,12 +102,14 @@ const controlRecipe = async () => {
             state.recipe.parseIngredients();
     
             // Calculate servings and time 
-            state.recipe.calcTime();
             state.recipe.calcServings();
+            state.recipe.calcTime();
     
             // Render recipe
             clearLoader();
-            recipeView.renderRecipe(state.recipe);
+            recipeView.renderRecipe(
+                state.recipe,
+                state.likes.isLiked(id));
         } catch (error) {
             console.log(error)
             alert('Error processing recipe');
@@ -134,6 +139,57 @@ const controlList = () => {
     })
 }
 
+
+
+/*
+* Like Controller
+*/
+const controlLike = () => {
+    if (!state.likes) state.likes = new Likes();
+    const curID = state.recipe.id;
+
+    // User has NOt yet liked current recipe
+    if (!state.likes.isLiked(curID)) {
+        // Add like to the state
+        const newLike = state.likes.addLike(
+            curID,
+            state.recipe.title,
+            state.recipe.author,
+            state.recipe.img
+        );
+        // Toggle the like btn
+        likeView.toggleLikeBtn(true);
+        // Add like to UI list
+        likeView.renderLike(newLike);
+    // User has liked this recipe
+    } else {
+        // Remove like from the state
+        state.likes.deleteLike(curID);
+        // Toggle the like btn
+        likeView.toggleLikeBtn(false);
+        // Remove like from UI list
+        likeView.deleteLike(curID);
+    }
+
+    likeView.toggleLikeMenu(state.likes.getNumLikes());
+
+};
+
+// Restore liked recipes on page load
+
+window.addEventListener('load', () => {
+    state.likes = new Likes();
+    
+    // Read the storage
+    state.likes.readStorage();
+
+    // Toggel like menu button
+    likeView.toggleLikeMenu(state.likes.getNumLikes());
+
+    // Render the existing likes
+    state.likes.likes.forEach(like => likeView.renderLike(like));
+});
+
 // Handling recipe button clicks
 
 elements.recipe.addEventListener('click', e => {
@@ -141,15 +197,23 @@ elements.recipe.addEventListener('click', e => {
         // Decrease button is clicked
         if(state.recipe.servings > 1) {
             state.recipe.updateServings('dec');
+            state.recipe.calcTime();
             recipeView.updateServingsIngredients(state.recipe);
+            
         }
 
     }else if(e.target.matches('.btn-increase, .btn-increase *')) {
         // Increase button is clicked
         state.recipe.updateServings('inc');
+        state.recipe.calcTime();
         recipeView.updateServingsIngredients(state.recipe);
+        
     }else if(e.target.matches('.recipe__btn--add, .recipe__btn--add *')) {
+        // add shopping list
         controlList();
+    }else if(e.target.matches('.recipe__love, .recipe__love *')) {
+        // add like list
+        controlLike();
     }
     
 });
@@ -157,7 +221,7 @@ elements.recipe.addEventListener('click', e => {
 // Handling shopping button clicks
 
 elements.shopping.addEventListener('click', e => {
-    const id = e.target.closest('.shopping__item').dataset.itemId;
+    const id = e.target.closest('.shopping__item').dataset.itemid;
     console.log(id);
     //Handle delete button
     if(e.target.matches('.shopping__delete, .shopping__delete *')) {
@@ -166,5 +230,8 @@ elements.shopping.addEventListener('click', e => {
         
         // remove item from UI
         listView.deleteItem(id);
+    }else if(e.target.matches('.shopping__count-value')) {
+        const val = parseFloat(e.target.value, 10);
+        state.list.updateCount(id, val);
     }
 })
